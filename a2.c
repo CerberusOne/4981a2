@@ -157,17 +157,37 @@ int serverSetup(key_t mkey, int msg_id){
 //setup client
 int clientSetup(int msg_id){
 	int size, flags, retval;
+	char* quit = "q";
+	char filename[1024];
+	char* priorityChar;
+	long priority;
+
 	//Create a thread
 		//if an event occurs in the IPC Message queue 
 			//if the new message's type_PID is the same as this process's PID
 				//print the message data
 	//while not EOF
-	//while(1){
+	while(1){
 		//Prompt the user for a filename
-		//save the filename		
+		printf("Enter input (q quit):\n");
+
+		//save the filename
+		gets(filename);
+		
+		//kill threads and exit
+		if(strcmp(filename, quit) == 0){
+			printf("Exiting...");
+			return 0;
+		}
 		//Prompt for the message's priority
+		printf("Enter priority (1max - 3min): \n");
+
 		//save the priority
+		gets(priorityChar);
+		atoi(priorityChar);
+
 		//if the priority is between 1 and 10
+		if((priority >= 1) && (priority <= 3)){
 			//Save this process's PID
 			//Create a message object
 			Mesg message;
@@ -195,7 +215,9 @@ int clientSetup(int msg_id){
 			printf("Successful: msgsnd %d\n", result);
 		//otherwise, 
 			//print "priority must be between 1 and 10"
-	//}
+		}
+		
+	}
 
 	return 0;
 }
