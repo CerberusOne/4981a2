@@ -84,10 +84,10 @@ int main(int argc, char *argv[]){
 	char userCommand[128];
 	key_t mkey;
 	int msg_id;
-	int semKey, sid, status;	//semaphore key, id and status structure
+	//int semKey, sid, status;	//semaphore key, id and status structure
 
-	semKey = 200;
-	sdi = initsem((key_t)semKey);
+	//semKey = 200;
+	//sdi = initsem((key_t)semKey);
 
 
 	//Generate a PIC key value
