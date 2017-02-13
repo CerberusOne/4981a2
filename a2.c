@@ -111,6 +111,7 @@ int main(int argc, char *argv[]){
 	
 //setup server
 //WIP
+	//semaphores
 int serverSetup(key_t mkey, int msg_id){
 	//int permflags;	//holds the result of msgget
 	int result, length;
@@ -245,7 +246,7 @@ int sendFile(char* filename, char* messageData, long pid, long priority, int msg
 
 	while(fgets(segment, sizeof(segment), fp)){
 		printf("%s\n", segment);
-		sendSegment(segment, pid, priority, msg_id);
+		printf("server/msg_snd: %d\n", sendSegment(segment, pid, priority, msg_id));
 	}
 
 	return lineCounter;
@@ -277,6 +278,8 @@ int sendSegment(char segment[MAXMESSAGEDATA], long pid, long priority, int msg_i
 
 
 //setup client
+//WIP
+	//semaphores
 int clientSetup(int msg_id){
 	//int size, flags, retval;
 	char quit[] = "q";			//command used to exit program
@@ -354,10 +357,11 @@ int clientSetup(int msg_id){
 void promptUser(char *prompt, char *filename){
 	fflush(stdin);
 
+	pthread_mutex_lock(&printfLock);
 	//Prompt the user for a filename
 	printf("%s", prompt);
 	
-	pthread_mutex_lock(&printfLock);
+	
 	//save the filename
 	fgets(filename, 32, stdin);
 	
@@ -391,13 +395,21 @@ char* createMesgData(char* pidChar, char* filename){
 	return mesg_data;
 }
 
+
+//WIP
+	//semaphores
 void* checkQueue(void* msg_id){
 	Mesg message;
 	int result;
 	int length = sizeof(Mesg) - sizeof(long);
 	int message_id = *((int*)msg_id);
 
-	printf("Starting: checkQueue thread");
+	fflush(stdout);
+
+	pthread_mutex_lock(&printfLock);
+	printf("Starting: checkQueue thread\n");
+	pthread_mutex_unlock(&printfLock);
+
 
 	while(1){
 		//WAIT(Buffer Empty)
