@@ -43,6 +43,8 @@
 #include <sys/msg.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <stdint.h>
 
 
 #define MAXMESSAGEDATA 4096
@@ -66,8 +68,11 @@ Mesg createMesg(long type, char mesg_data[MAXMESSAGEDATA]);
 char* createMesgData(char* pidChar, char* filename);
 void processRequest(Mesg message, long* pid, char* filename, long* priority);
 void getMesgPid(Mesg message, long* pid);
-void copyStr(char str1[], char str2[]);
+int sendFile(char* filename, char* messageData, long pid, long priority, int msg_id);
+int sendSegment(char segment[MAXMESSAGEDATA], long pid, long priority, int msg_id);
+void* checkQueue(void* msg_id);
 
+pthread_mutex_t printfLock = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char *argv[]){
 	char clientStr[] = "client";
@@ -103,12 +108,15 @@ int main(int argc, char *argv[]){
 	return 0;
 }
 
-	//setup server
+	
+//setup server
+//WIP
 int serverSetup(key_t mkey, int msg_id){
 	//int permflags;	//holds the result of msgget
 	int result, length;
 	Mesg message;
 	char filename[1024];
+	char messageData[MAXMESSAGEDATA];	//
 	long pid = 0;
 	long priority = 0;
 
@@ -136,7 +144,8 @@ int serverSetup(key_t mkey, int msg_id){
 		//get the pid, filename(data) and priority from the message
 		processRequest(message, &pid, filename, &priority);
 
-		printf("pid: %ld\nfilename: %s\npriority: %ld\n", pid, filename, priority);
+		//printf("pid: %ld\nfilename: %s\npriority: %ld\n", pid, filename, priority);
+
 
 
 
@@ -151,7 +160,21 @@ int serverSetup(key_t mkey, int msg_id){
 			//if the type_PID is null
 				//print error: found message with no PID
 			//otherwise, Save the message data
-				//Open a file with the name of the message data
+				//Open a file with the name of the message data 
+				
+
+				printf("successRate: %d\n", sendFile(filename, messageData, pid, priority, msg_id));
+				//printf("Success rate: %d\n", successRate);
+					//open file in MAXMESSAGEDATA size segments
+						//calculate size of the file if possible
+							//save stat of how many segments will send
+						//loop until EOF is found
+							//wait for access
+							//send each segment 
+							//signal access
+							//count each successful send
+
+
 
 
 				//if the fails to open
@@ -190,13 +213,17 @@ void processRequest(Mesg message, long* pid, char* filename, long* priority){
 			*pidChar = '\0';
 		}
 
-		if(i == 0)
+		//obtain PID from first line
+		if(i == 0){
 			*pid = strtol(temp, &ptr, 10);
-		if(i == 1)
-			strcpy(filename, temp);
+		}
 
+		//obtain filename from second line
+		if(i == 1){
+			strcpy(filename, temp);
+		}
 		
-		//fix the new line character back to normal
+		//fix the null character back to a new line character
 		if(pidChar != '\0'){
 			*pidChar = '\n';
 		}
@@ -206,29 +233,85 @@ void processRequest(Mesg message, long* pid, char* filename, long* priority){
 	}	
 }
 
+int sendFile(char* filename, char* messageData, long pid, long priority, int msg_id){
+	FILE *fp;	//pointer to file
+	char segment[MAXMESSAGEDATA];
+	int lineCounter = 0;
+
+	if((fp = fopen(filename, "r+")) == 0){	//open file in append binary mode
+		printf("Failed: sendFile/fileopen\n");
+		return -1;
+	}
+
+	while(fgets(segment, sizeof(segment), fp)){
+		printf("%s\n", segment);
+		sendSegment(segment, pid, priority, msg_id);
+	}
+
+	return lineCounter;
+}
+
+//WIP
+int sendSegment(char segment[MAXMESSAGEDATA], long pid, long priority, int msg_id){
+	Mesg message;
+	int result = 0;
+	//WAIT(access)
+	//make a message
+	message = createMesg(pid, segment);
+	//write to message queue
+	if((result = msgsnd(msg_id, &message, message.mesg_len, 0) == -1))
+	{
+		printf("Failed: msgsnd %d\n", result);
+		return (-1);
+	}
+
+	printf("Successful: data: %s\n", message.mesg_data);
+	//SIGNAL(access)
+	//SIGNAL(Buffer Empty)
+	//If segment has EOF
+		//FREE(segment)
+		//Destroy process
+	return 0;
+}
+
+
+
 //setup client
 int clientSetup(int msg_id){
 	//int size, flags, retval;
 	char quit[] = "q";			//command used to exit program
-	char filename[1024];			//filename of requested file to get
+	char filename[1024];		//filename of requested file to get
 	char priorityChar[1024];	//priority of current message 
 	long priority;				//priority of current message after being converted to long
 	long pid;					//pid of current thread
 	char pidChar[1024];			//pid of current thread in char* form
 	int result;					//send the message to the IPC Message queue
 	char mesg_data[MAXMESSAGEDATA];
+	pthread_t messageQueueHelperThread;
 
+	int *message_id = malloc(sizeof(*message_id));
+	if(message_id == NULL){
+		printf("Failed: allocate memory for (void*) message_id");
+		return -1;
+	}
+
+	*message_id = msg_id;
 
 	//Create a thread
+	pthread_create(&messageQueueHelperThread, NULL, checkQueue, (void*) message_id);
 		//if an event occurs in the IPC Message queue 
 			//if the new message's type_PID is the same as this process's PID
 				//print the message data
 
 	//user input loop
 	while(1){
+
 		//prompt for filename from user
 		promptUser("Enter input (q quit): ", filename);
 		
+		//unlock any printing from happening in client
+		
+
 		//kill threads and exit
 		if(strcmp(filename, quit) == 0){
 			printf("Exiting...\n");
@@ -257,7 +340,6 @@ int clientSetup(int msg_id){
 				printf("Failed: msgsnd %d\n", result);
 				return (-1);
 			}
-			printf("Successful: data: %s\n", message.mesg_data);
 		}
 		else{
 			//alert user that priority is not properly defined
@@ -274,16 +356,20 @@ void promptUser(char *prompt, char *filename){
 
 	//Prompt the user for a filename
 	printf("%s", prompt);
-
+	
+	pthread_mutex_lock(&printfLock);
 	//save the filename
 	fgets(filename, 32, stdin);
+	
+	pthread_mutex_unlock(&printfLock);
+
 	//get rid of the new line character generated by fgets
 	filename[strcspn(filename, "\n")] = '\0';
 }
 
 //length is the length of the file's conent
 //message data is filename set by the user
-Mesg createMesg(long type, char mesg_data[1024]){
+Mesg createMesg(long type, char mesg_data[MAXMESSAGEDATA]){
 	fflush(stdin);
 	Mesg message;
 	message.mesg_type = type;
@@ -303,4 +389,37 @@ char* createMesgData(char* pidChar, char* filename){
 	strcat(mesg_data, filename);
 
 	return mesg_data;
+}
+
+void* checkQueue(void* msg_id){
+	Mesg message;
+	int result;
+	int length = sizeof(Mesg) - sizeof(long);
+	int message_id = *((int*)msg_id);
+
+	printf("Starting: checkQueue thread");
+
+	while(1){
+		//WAIT(Buffer Empty)
+		//WAIT(Access)
+
+		//lock any printing from happening in client
+		pthread_mutex_lock(&printfLock);
+
+		//Check message.mesg_typ <= 3
+		if((result = msgrcv(message_id, &message, length, 0, 0)) == -1){
+			printf("Failed: msgrcv %d\n", result);
+		}
+		printf("checkQueue: %s\n", message.mesg_data);
+		//unlock any printing from happening in client
+		pthread_mutex_unlock(&printfLock);
+
+			//SIGNAL(Buffer Empty)
+		//SIGNAL(Acess)
+		//print message data to screen
+		//If data has EOF
+			//Unblock MUTEX
+
+		
+	}
 }
