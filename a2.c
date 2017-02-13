@@ -41,6 +41,7 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <sys/sem.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -72,6 +73,9 @@ int sendFile(char* filename, char* messageData, long pid, long priority, int msg
 int sendSegment(char segment[MAXMESSAGEDATA], long pid, long priority, int msg_id);
 void* checkQueue(void* msg_id);
 
+void P(int);	//wait(sem)
+void V(int);	//signal(sem)
+
 pthread_mutex_t printfLock = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char *argv[]){
@@ -80,6 +84,11 @@ int main(int argc, char *argv[]){
 	char userCommand[128];
 	key_t mkey;
 	int msg_id;
+	int semKey, sid, status;	//semaphore key, id and status structure
+
+	semKey = 200;
+	sdi = initsem((key_t)semKey);
+
 
 	//Generate a PIC key value
 	mkey = ftok (".", 'm');
